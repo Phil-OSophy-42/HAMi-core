@@ -20,6 +20,10 @@
 #include "include/process_utils.h"
 #include "include/memory_limit.h"
 #include "multiprocess/multiprocess_memory_limit.h"
+#include "config/hami_config.h"
+
+/* External reference to global config loaded in libvgpu.c */
+extern hami_core_config_t g_hami_config;
 
 
 #ifndef SEM_WAIT_TIME
@@ -154,14 +158,9 @@ int load_env_from_file(char *filename) {
 }
 
 void do_init_device_memory_limits(uint64_t* arr, int len) {
-    size_t fallback_limit = get_limit_from_env(CUDA_DEVICE_MEMORY_LIMIT);
-    int i;
-    for (i = 0; i < len; ++i) {
-        char env_name[CUDA_DEVICE_MEMORY_LIMIT_KEY_LENGTH] = CUDA_DEVICE_MEMORY_LIMIT;
-        char index_name[8];
-        snprintf(index_name, 8, "_%d", i);
-        strcat(env_name, index_name);
-        size_t cur_limit = get_limit_from_env(env_name);
+    size_t fallback_limit = g_hami_config.global_core_limit;
+    for (int i = 0; i < len; ++i) {
+        size_t cur_limit = g_hami_config.devices[i].memory_limit;
         if (cur_limit > 0) {
             arr[i] = cur_limit;
         } else if (fallback_limit > 0) {
@@ -173,15 +172,10 @@ void do_init_device_memory_limits(uint64_t* arr, int len) {
 }
 
 void do_init_device_sm_limits(uint64_t *arr, int len) {
-    size_t fallback_limit = get_limit_from_env(CUDA_DEVICE_SM_LIMIT);
+    size_t fallback_limit = g_hami_config.global_core_limit;
     if (fallback_limit == 0) fallback_limit = 100;
-    int i;
-    for (i = 0; i < len; ++i) {
-        char env_name[CUDA_DEVICE_SM_LIMIT_KEY_LENGTH] = CUDA_DEVICE_SM_LIMIT;
-        char index_name[8];
-        snprintf(index_name, 8, "_%d", i);
-        strcat(env_name, index_name);
-        size_t cur_limit = get_limit_from_env(env_name);
+    for (int i = 0; i < len; ++i) {
+        size_t cur_limit = g_hami_config.devices[i].cores_limit;
         if (cur_limit > 0) {
             arr[i] = cur_limit;
         } else if (fallback_limit > 0) {
@@ -660,10 +654,7 @@ void try_create_shrreg() {
 
     umask(0);
 
-    char* shr_reg_file = getenv(MULTIPROCESS_SHARED_REGION_CACHE_ENV);
-    if (shr_reg_file == NULL) {
-        shr_reg_file = MULTIPROCESS_SHARED_REGION_CACHE_DEFAULT;
-    }
+    char* shr_reg_file = g_hami_config.shared_cache_path;
     // Initialize NVML BEFORE!! open it
     //nvmlInit();
 

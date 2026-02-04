@@ -12,10 +12,11 @@
 #include "include/nvml_override.h"
 #include "allocator/allocator.h"
 #include "multiprocess/multiprocess_memory_limit.h"
+#include "config/hami_config.h"
 
 extern void init_utilization_watcher(void);
 extern void utilization_watcher(void);
-extern void initial_virtual_map(void); 
+extern void initial_virtual_map(void);
 extern int set_host_pid(int hostpid);
 extern void allocator_init(void);
 void preInit();
@@ -25,6 +26,7 @@ void *vgpulib;
 pthread_once_t pre_cuinit_flag = PTHREAD_ONCE_INIT;
 pthread_once_t post_cuinit_flag = PTHREAD_ONCE_INIT;
 pthread_once_t dlsym_init_flag = PTHREAD_ONCE_INIT;
+pthread_once_t config_init_flag = PTHREAD_ONCE_INIT;
 
 /* pidfound is to enable core utilization, if we don't find hostpid in container, then we have no
  where to find its core utilization */
@@ -35,6 +37,9 @@ extern int env_utilization_switch;
 
 /* context size for a certain task, we need to add it into device-memory usage*/
 extern size_t context_size;
+
+/* hami-core configuration loaded from file or environment variables */
+static hami_core_config_t g_hami_config;
 
 /* This is the symbol search function */
 fp_dlsym real_dlsym = NULL;
@@ -869,7 +874,17 @@ void preInit(){
     ENSURE_INITIALIZED();
 }
 
+static void load_hami_config(void) {
+    const char* default_path = HAMI_CONFIG_PATH;
+
+    hami_load_config(default_path, &g_hami_config);
+    LOG_Debug("HAMi configuration loaded successfully from %s", hami_config_loaded_from_file()? " config file" : "environment variables");
+}
+
 void postInit(){
+    /* Load HAMI configuration before other initializations */
+    load_hami_config();
+
     allocator_init();
     map_cuda_visible_devices();
     try_lock_unified_lock();
